@@ -15,7 +15,7 @@ local _MARKER         = "AutoChest_v1"
 
 -- ⚠ Set this to your raw GitHub URL
 -- Example: https://raw.githubusercontent.com/YourName/YourRepo/main/AutoChest.lua
-local SCRIPT_URL = "YOUR_RAW_GITHUB_URL_HERE"
+local SCRIPT_URL = "https://raw.githubusercontent.com/HellishHumanoid/ropiece/refs/heads/main/ropiece"
 
 -- Loader: downloads and runs the script fresh on every rejoin
 local LOADER = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '", true))()'
