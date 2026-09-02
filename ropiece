@@ -1,0 +1,370 @@
+--[[
+    Auto-Chest
+    Custom GUI — no external libraries needed.
+    
+    Host this file on GitHub and set SCRIPT_URL to the raw URL.
+    The loader will download and re-execute it fresh every rejoin.
+]]
+
+local HttpService     = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players         = game:GetService("Players")
+local UserInputService= game:GetService("UserInputService")
+local player          = Players.LocalPlayer
+local _MARKER         = "AutoChest_v1"
+
+-- ⚠ Set this to your raw GitHub URL
+-- Example: https://raw.githubusercontent.com/YourName/YourRepo/main/AutoChest.lua
+local SCRIPT_URL = "YOUR_RAW_GITHUB_URL_HERE"
+
+-- Loader: downloads and runs the script fresh on every rejoin
+local LOADER = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '", true))()'
+
+-- If a GUI already exists from a double-execution, remove it and continue
+local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoChestGui")
+if existingGui then existingGui:Destroy() end
+
+local CONFIG_FILE   = "autochest_config.json"
+local AUTOEXEC_FILE = "autoexec/AutoChest.lua"
+
+local function setupRejoin()
+    -- Write the one-liner to autoexec
+    pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
+    -- Queue it for the next session
+    local queued = false
+    if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
+    if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
+end
+
+--==========================================================
+-- Config
+--==========================================================
+local savedConfig = {}
+pcall(function()
+    local raw = readfile(CONFIG_FILE)
+    if raw and raw ~= "" then savedConfig = HttpService:JSONDecode(raw) or {} end
+end)
+
+local function saveConfig(t)
+    pcall(function() writefile(CONFIG_FILE, HttpService:JSONEncode(t)) end)
+end
+
+local function clearConfig()
+    pcall(function() writefile(CONFIG_FILE, HttpService:JSONEncode({})) end)
+end
+
+--==========================================================
+-- Chest / Rejoin logic
+--==========================================================
+local function getAllClickDetectors()
+    local list = {}
+    local treasure = workspace:FindFirstChild("treasure")
+    if not treasure then return list end
+    for _, coin in ipairs(treasure:GetChildren()) do
+        if coin.Name == "coin" then
+            for _, obj in ipairs(coin:GetDescendants()) do
+                if obj:IsA("ClickDetector") then table.insert(list, obj) end
+            end
+        end
+    end
+    return list
+end
+
+local function fireAllChests()
+    local detectors = getAllClickDetectors()
+    for _, cd in ipairs(detectors) do
+        task.spawn(function() pcall(fireclickdetector, cd) end)
+    end
+    return #detectors
+end
+
+local function setupRejoin()
+    local src = getSelfSource()
+
+    if src then
+        -- Best case: queue and write the full script source directly
+        pcall(function() writefile(SCRIPT_FILE,   src) end)
+        pcall(function() writefile(AUTOEXEC_FILE, src) end)
+        local queued = false
+        if not queued then pcall(function() queueteleport(src);    queued = true end) end
+        if not queued then pcall(function() queue_on_teleport(src); queued = true end) end
+    else
+        -- Fallback: file-based loader
+        local LOADER = [[task.spawn(function()
+    for i=1,15 do task.wait(2)
+        local ok,s=pcall(readfile,"AutoChest.lua")
+        if ok and s and s~="" then pcall(loadstring(s)); break end
+    end
+end)]]
+        pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
+        local queued = false
+        if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
+        if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
+    end
+end
+
+local function doRejoin()
+    saveConfig({ autoRejoin = true })
+    task.wait(0.1)
+    setupRejoin()
+    task.wait(0.2)
+
+    -- Keep spamming until the teleport actually works (session ends)
+    while true do
+        pcall(function()
+            if #Players:GetPlayers() <= 1 then
+                player:Kick("\nRejoining...")
+                task.wait(0.3)
+                TeleportService:Teleport(game.PlaceId, player)
+            else
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+            end
+        end)
+        task.wait(1)  -- wait 1s then try again if still in session
+    end
+end
+
+--==========================================================
+-- GUI
+--==========================================================
+local gui = Instance.new("ScreenGui")
+gui.Name          = "AutoChestGui"
+gui.ResetOnSpawn  = false
+gui.ZIndexBehavior= Enum.ZIndexBehavior.Sibling
+gui.Parent        = player:WaitForChild("PlayerGui")
+
+-- Main frame
+local frame = Instance.new("Frame")
+frame.Name              = "Main"
+frame.Size              = UDim2.new(0, 240, 0, 120)
+frame.Position          = UDim2.new(0.5, -120, 0, 24)
+frame.BackgroundColor3  = Color3.fromRGB(18, 18, 22)
+frame.BorderSizePixel   = 0
+frame.Parent            = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+-- Stroke
+local stroke = Instance.new("UIStroke", frame)
+stroke.Color     = Color3.fromRGB(60, 60, 75)
+stroke.Thickness = 1.5
+
+-- Title bar
+local titleBar = Instance.new("Frame", frame)
+titleBar.Size              = UDim2.new(1, 0, 0, 32)
+titleBar.BackgroundColor3  = Color3.fromRGB(26, 26, 34)
+titleBar.BorderSizePixel   = 0
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
+
+-- Patch bottom corners of title bar
+local patch = Instance.new("Frame", titleBar)
+patch.Size             = UDim2.new(1, 0, 0, 10)
+patch.Position         = UDim2.new(0, 0, 1, -10)
+patch.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
+patch.BorderSizePixel  = 0
+
+-- Title text
+local title = Instance.new("TextLabel", titleBar)
+title.Size               = UDim2.new(1, -10, 1, 0)
+title.Position           = UDim2.new(0, 12, 0, 0)
+title.BackgroundTransparency = 1
+title.Text               = "✦  Auto Chest"
+title.TextColor3         = Color3.fromRGB(210, 210, 230)
+title.TextSize           = 13
+title.Font               = Enum.Font.GothamBold
+title.TextXAlignment     = Enum.TextXAlignment.Left
+
+-- Status label
+local statusLabel = Instance.new("TextLabel", frame)
+statusLabel.Size               = UDim2.new(1, -16, 0, 16)
+statusLabel.Position           = UDim2.new(0, 8, 0, 36)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text               = "Idle"
+statusLabel.TextColor3         = Color3.fromRGB(100, 100, 120)
+statusLabel.TextSize           = 11
+statusLabel.Font               = Enum.Font.Gotham
+statusLabel.TextXAlignment     = Enum.TextXAlignment.Left
+
+local function setStatus(txt, col)
+    statusLabel.Text       = txt
+    statusLabel.TextColor3 = col or Color3.fromRGB(100, 100, 120)
+end
+
+-- Toggle button factory
+local function makeToggle(parent, yPos, labelText, onColor)
+    local row = Instance.new("Frame", parent)
+    row.Size             = UDim2.new(1, -16, 0, 28)
+    row.Position         = UDim2.new(0, 8, 0, yPos)
+    row.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+    row.BorderSizePixel  = 0
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+
+    local lbl = Instance.new("TextLabel", row)
+    lbl.Size               = UDim2.new(1, -52, 1, 0)
+    lbl.Position           = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text               = labelText
+    lbl.TextColor3         = Color3.fromRGB(200, 200, 215)
+    lbl.TextSize           = 12
+    lbl.Font               = Enum.Font.Gotham
+    lbl.TextXAlignment     = Enum.TextXAlignment.Left
+
+    -- Toggle pill
+    local pill = Instance.new("Frame", row)
+    pill.Size             = UDim2.new(0, 38, 0, 20)
+    pill.Position         = UDim2.new(1, -46, 0.5, -10)
+    pill.BackgroundColor3 = Color3.fromRGB(55, 55, 68)
+    pill.BorderSizePixel  = 0
+    Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("Frame", pill)
+    knob.Size             = UDim2.new(0, 14, 0, 14)
+    knob.Position         = UDim2.new(0, 3, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(160, 160, 180)
+    knob.BorderSizePixel  = 0
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local state = false
+    local TweenService = game:GetService("TweenService")
+    local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
+
+    local function setState(v, callback)
+        state = v
+        TweenService:Create(pill,  info, { BackgroundColor3 = v and onColor or Color3.fromRGB(55, 55, 68) }):Play()
+        TweenService:Create(knob,  info, { Position = v and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7) }):Play()
+        TweenService:Create(knob,  info, { BackgroundColor3 = v and Color3.fromRGB(255,255,255) or Color3.fromRGB(160,160,180) }):Play()
+        if callback then callback(v) end
+    end
+
+    row.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then
+            setState(not state, row:GetAttribute("_callback"))
+        end
+    end)
+
+    return {
+        setState = setState,
+        getState = function() return state end,
+        row      = row,
+    }
+end
+
+--==========================================================
+-- Toggles
+--==========================================================
+local autoChestRunning  = false
+local autoRejoinRunning = false
+
+local toggleChest  = makeToggle(frame, 58, "Auto-Chest",          Color3.fromRGB(80, 180, 120))
+local toggleRejoin = makeToggle(frame, 90, "Auto-Chest + Rejoin", Color3.fromRGB(90, 140, 220))
+
+-- Auto-Chest callback
+toggleChest.setState(false, function(on)
+    autoChestRunning = on
+    if on then
+        setStatus("Collecting chests...", Color3.fromRGB(80, 200, 120))
+        task.spawn(function()
+            while autoChestRunning do
+                local n = fireAllChests()
+                setStatus("Opened " .. n .. " chests.", Color3.fromRGB(80, 200, 120))
+                task.wait(0.5)
+            end
+            setStatus("Idle", Color3.fromRGB(100, 100, 120))
+        end)
+    else
+        setStatus("Idle", Color3.fromRGB(100, 100, 120))
+    end
+end)
+
+-- Route the toggle through a public setter
+local function setChest(on)
+    toggleChest.setState(on, function(v)
+        autoChestRunning = v
+        if v then
+            setStatus("Collecting chests...", Color3.fromRGB(80, 200, 120))
+            task.spawn(function()
+                while autoChestRunning do
+                    local n = fireAllChests()
+                    setStatus("Opened " .. n .. " chests.", Color3.fromRGB(80, 200, 120))
+                    task.wait(0.5)
+                end
+                setStatus("Idle", Color3.fromRGB(100, 100, 120))
+            end)
+        else
+            setStatus("Idle", Color3.fromRGB(100, 100, 120))
+        end
+    end)
+end
+
+local function setRejoin(on)
+    toggleRejoin.setState(on, function(v)
+        autoRejoinRunning = v
+        if v then
+            task.spawn(function()
+                while autoRejoinRunning do
+                    local n = fireAllChests()
+                    setStatus("Opened " .. n .. " — rejoining in 6s...", Color3.fromRGB(90, 160, 240))
+                    task.wait(6)
+                    doRejoin()
+                    local waited = 0
+                    while autoRejoinRunning and waited < 20 do
+                        task.wait(1); waited += 1
+                    end
+                    if autoRejoinRunning then
+                        setStatus("Rejoin failed, retrying...", Color3.fromRGB(220, 100, 80))
+                    end
+                end
+            end)
+        else
+            clearConfig()
+            setStatus("Idle", Color3.fromRGB(100, 100, 120))
+        end
+    end)
+end
+
+-- Wire up clicks
+toggleChest.row.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        setChest(not toggleChest.getState())
+    end
+end)
+
+toggleRejoin.row.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        setRejoin(not toggleRejoin.getState())
+    end
+end)
+
+--==========================================================
+-- Drag
+--==========================================================
+do
+    local dragging, dragStart, startPos
+    titleBar.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+        or inp.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = inp.Position; startPos = frame.Position
+            inp.Changed:Connect(function()
+                if inp.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement
+        or inp.UserInputType == Enum.UserInputType.Touch) then
+            local d = inp.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+                                       startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+end
+
+--==========================================================
+-- Auto-restore after rejoin
+--==========================================================
+if savedConfig.autoRejoin == true then
+    task.wait(5)
+    setRejoin(true)
+end
