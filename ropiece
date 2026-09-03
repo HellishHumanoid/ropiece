@@ -17,9 +17,11 @@ local _MARKER         = "AutoChest_v1"
 -- Example: https://raw.githubusercontent.com/YourName/YourRepo/main/AutoChest.lua
 local SCRIPT_URL = "https://raw.githubusercontent.com/HellishHumanoid/ropiece/refs/heads/main/ropiece"
 
--- Loader: retries download up to 10 times in case of network hiccup
+-- Loader: waits for full game load then retries download up to 10 times
 local LOADER = ([[
 task.spawn(function()
+    if not game:IsLoaded() then game.Loaded:Wait() end
+    task.wait(2)
     for i = 1, 10 do
         local ok = pcall(function()
             loadstring(game:HttpGet("%s", true))()
@@ -285,8 +287,8 @@ local function setRejoin(on)
             task.spawn(function()
                 while autoRejoinRunning do
                     local n = fireAllChests()
-                    setStatus("Opened " .. n .. " — rejoining in 6s...", Color3.fromRGB(90, 160, 240))
-                    task.wait(6)
+                    setStatus("Opened " .. n .. " — rejoining in 3s...", Color3.fromRGB(90, 160, 240))
+                    task.wait(3)
                     doRejoin()
                     local waited = 0
                     while autoRejoinRunning and waited < 20 do
