@@ -28,9 +28,7 @@ local CONFIG_FILE   = "autochest_config.json"
 local AUTOEXEC_FILE = "autoexec/AutoChest.lua"
 
 local function setupRejoin()
-    -- Write the one-liner to autoexec
     pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
-    -- Queue it for the next session
     local queued = false
     if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
     if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
@@ -78,32 +76,24 @@ local function fireAllChests()
     return #detectors
 end
 
-local function setupRejoin()
-    -- Queue and write the GitHub loadstring — downloads fresh script every rejoin
-    pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
-    local queued = false
-    if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
-    if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
-end
-
 local function doRejoin()
     saveConfig({ autoRejoin = true })
     task.wait(0.1)
     setupRejoin()
     task.wait(0.2)
 
-    -- Keep spamming until the session ends
+    local placeId = game.PlaceId
     while true do
+        pcall(function() TeleportService:Teleport(placeId) end)
+        task.wait(0.3)
+        pcall(function() TeleportService:Teleport(placeId, player) end)
+        task.wait(0.3)
+        pcall(function() player:Kick("\nRejoining...") end)
+        task.wait(0.3)
         pcall(function()
-            if #Players:GetPlayers() <= 1 then
-                player:Kick("\nRejoining...")
-                task.wait(0.5)
-                TeleportService:Teleport(game.PlaceId, player)
-            else
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
-            end
+            TeleportService:TeleportToPlaceInstance(placeId, game.JobId, player)
         end)
-        task.wait(1)
+        task.wait(0.5)
     end
 end
 
