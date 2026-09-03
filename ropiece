@@ -79,28 +79,11 @@ local function fireAllChests()
 end
 
 local function setupRejoin()
-    local src = getSelfSource()
-
-    if src then
-        -- Best case: queue and write the full script source directly
-        pcall(function() writefile(SCRIPT_FILE,   src) end)
-        pcall(function() writefile(AUTOEXEC_FILE, src) end)
-        local queued = false
-        if not queued then pcall(function() queueteleport(src);    queued = true end) end
-        if not queued then pcall(function() queue_on_teleport(src); queued = true end) end
-    else
-        -- Fallback: file-based loader
-        local LOADER = [[task.spawn(function()
-    for i=1,15 do task.wait(2)
-        local ok,s=pcall(readfile,"AutoChest.lua")
-        if ok and s and s~="" then pcall(loadstring(s)); break end
-    end
-end)]]
-        pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
-        local queued = false
-        if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
-        if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
-    end
+    -- Queue and write the GitHub loadstring — downloads fresh script every rejoin
+    pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
+    local queued = false
+    if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
+    if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
 end
 
 local function doRejoin()
