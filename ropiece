@@ -113,14 +113,12 @@ local function doRejoin()
     while true do
         pcall(function()
             if #Players:GetPlayers() <= 1 then
-                player:Kick("\nRejoining...")
-                task.wait(0.3)
-                TeleportService:Teleport(game.PlaceId, player)
+                TeleportService:Teleport(game.PlaceId)
             else
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
             end
         end)
-        task.wait(1)  -- wait 1s then try again if still in session
+        task.wait(1)
     end
 end
 
