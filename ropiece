@@ -85,9 +85,11 @@ local function doRejoin()
     local placeId = game.PlaceId
     while true do
         pcall(function()
-            game:GetService("TeleportService"):Teleport(placeId)
+            player:Kick("\nRejoining...")
+            task.wait(0.3)
+            TeleportService:Teleport(placeId, player)
         end)
-        task.wait(0.5)
+        task.wait(1)
     end
 end
 
