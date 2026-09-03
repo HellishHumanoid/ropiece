@@ -17,22 +17,35 @@ local _MARKER         = "AutoChest_v1"
 -- Example: https://raw.githubusercontent.com/YourName/YourRepo/main/AutoChest.lua
 local SCRIPT_URL = "https://raw.githubusercontent.com/HellishHumanoid/ropiece/refs/heads/main/ropiece"
 
--- Loader: downloads and runs the script fresh on every rejoin
-local LOADER = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '", true))()'
-
--- If a GUI already exists from a double-execution, remove it and continue
-local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoChestGui")
-if existingGui then existingGui:Destroy() end
-
-local CONFIG_FILE   = "autochest_config.json"
-local AUTOEXEC_FILE = "autoexec/AutoChest.lua"
+-- Loader: retries download up to 10 times in case of network hiccup
+local LOADER = ([[
+task.spawn(function()
+    for i = 1, 10 do
+        local ok = pcall(function()
+            loadstring(game:HttpGet("%s", true))()
+        end)
+        if ok then break end
+        task.wait(3)
+    end
+end)
+]]):format(SCRIPT_URL)
 
 local function setupRejoin()
-    pcall(function() writefile(AUTOEXEC_FILE, LOADER) end)
+    -- Write to every common autoexec location
+    for _, path in ipairs({"autoexec/AutoChest.lua", "autoexec\\AutoChest.lua"}) do
+        pcall(function() writefile(path, LOADER) end)
+    end
+    -- Queue for next session
     local queued = false
     if not queued then pcall(function() queueteleport(LOADER);    queued = true end) end
     if not queued then pcall(function() queue_on_teleport(LOADER); queued = true end) end
 end
+
+local CONFIG_FILE = "autochest_config.json"
+
+-- Remove any existing GUI from a previous execution in the same session
+local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoChestGui")
+if existingGui then existingGui:Destroy() end
 
 --==========================================================
 -- Config
