@@ -109,11 +109,13 @@ local function doRejoin()
     setupRejoin()
     task.wait(0.2)
 
-    -- Keep spamming until the teleport actually works (session ends)
+    -- Keep spamming until the session ends
     while true do
         pcall(function()
             if #Players:GetPlayers() <= 1 then
-                TeleportService:Teleport(game.PlaceId)
+                player:Kick("\nRejoining...")
+                task.wait(0.5)
+                TeleportService:Teleport(game.PlaceId, player)
             else
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
             end
